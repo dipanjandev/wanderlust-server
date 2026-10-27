@@ -22,6 +22,7 @@ export async function connectToMongoDB() {
 const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("wanderlust-db");
 const destinationCollection = db.collection("destination");
+const bookingCollection = db.collection("bookings");
 
 app.post("/add-destination", async (req, res) => {
   const data = req.body;
@@ -64,6 +65,24 @@ app.delete("/destinations/:id", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is Running Fine" });
+});
+
+app.post("/booking", async (req, res) => {
+  const data = req.body;
+  const result = await bookingCollection.insertOne(data);
+  res.send(result);
+});
+
+app.get("/mybookings/:email", async (req, res) => {
+  const { email } = req.params;
+  const result = await bookingCollection.find({ email: email }).toArray();
+  res.send(result);
+});
+
+app.delete("/mybookings/:id", async (req, res) => {
+  const { id } = req.params;
+  const result = await bookingCollection.deleteOne({ _id: id });
+  res.send(result);
 });
 
 app.listen(PORT, () => {
