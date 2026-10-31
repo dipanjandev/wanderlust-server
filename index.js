@@ -1,7 +1,8 @@
 import express from "express";
-import { MongoClient, ObjectId } from "mongodb";
+import { Long, MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
 import "dotenv/config";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 const app = express();
 const PORT = 8000;
 
@@ -24,7 +25,31 @@ const db = mongoClient.db("wanderlust-db");
 const destinationCollection = db.collection("destination");
 const bookingCollection = db.collection("bookings");
 
-app.post("/add-destination", async (req, res) => {
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  // console.log(authHeader);
+  if (!authHeader) {
+    return res.status(401).send({ msg: "unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  // console.log(token);
+  if (!token) {
+    return res.status(401).send({ msg: "unauthorized" });
+  }
+
+  const jwks = createRemoteJWKSet(
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
+  );
+  try {
+    const { payload } = await jwtVerify(token, jwks);
+    next();
+  } catch (error) {
+    return res.status(500).send({ msg: "Server Error...!" });
+  }
+};
+
+app.post("/add-destination", verifyToken, async (req, res) => {
   const data = req.body;
   const result = await destinationCollection.insertOne(data);
   // console.log(result);
@@ -36,15 +61,21 @@ app.get("/destinations", async (req, res) => {
   res.send(result);
 });
 
-app.get("/destinations/:id", async (req, res) => {
-  const { id } = req.params;
-  // console.log(id);
-  const result = await destinationCollection.findOne({ _id: new ObjectId(id) });
-
+app.get("/featured-destination", async (req, res) => {
+  const result = await destinationCollection.find().limit(5).toArray();
   res.send(result);
 });
 
-app.patch("/destination/:id", async (req, res) => {
+app.get("/destinations/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  // console.log(id);
+  const result = await destinationCollection.findOne({
+    _id: new ObjectId(id),
+  });
+  res.send(result);
+});
+
+app.patch("/destination/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const updatedData = req.body;
   const result = await destinationCollection.updateOne(
@@ -55,7 +86,7 @@ app.patch("/destination/:id", async (req, res) => {
   res.json(result);
 });
 
-app.delete("/destinations/:id", async (req, res) => {
+app.delete("/destinations/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const result = await destinationCollection.deleteOne({
     _id: new ObjectId(id),
@@ -88,3 +119,5 @@ app.delete("/mybookings/:id", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`This Server Is Running on port number: ${PORT}`);
 });
+
+export default app;
